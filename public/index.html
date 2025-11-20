@@ -263,7 +263,7 @@
                 expireHtml = `<span style='color:#dc3545;font-weight:bold;'>${expire}</span>`;
               }
             }
-            const editBtn = c.id ? ` <button class='btn btn-link btn-sm p-0' onclick='showEditCookieExpireModal(${c.id}, "${c.expire_at || ''}", "${c.account_info || ''}", "${c.website_info || ''}", "${row.code}")'>修改</button>` : '';
+            const editBtn = c.kami_cookie_id ? ` <button class='btn btn-link btn-sm p-0' onclick='showEditCookieExpireModal(${c.kami_cookie_id}, "${c.expire_at || ''}", "${c.account_info || ''}", "${c.website_info || ''}", "${row.code}")'>修改</button>` : '';
             return `<span style='white-space:nowrap;'>【${account}】：${active} / ${expireHtml}${editBtn}</span>`;
           }).join('<br>');
         } else {

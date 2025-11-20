@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>卡密生成与管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+
+    .container-custom {
+      max-width: 1800px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px #0001;
+      padding: 32px 40px;
+    }
+
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 32px;
+    }
+
+    .form-label {
+      font-weight: 500;
+    }
+
+    .table {
+      margin-top: 24px;
+    }
+
+    .status-normal {
+      color: #198754;
+      font-weight: bold;
+    }
+
+    .status-disabled {
+      color: #dc3545;
+      font-weight: bold;
+    }
+
+    .btn-status {
+      min-width: 30px;
+    }
+
+    #msg {
+      margin-left: 16px;
+      font-weight: bold;
+    }
+
+    .flex-form-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: end;
+    }
+
+    .flex-form-row>* {
+      flex: 1 1 180px;
+      min-width: 120px;
+    }
+
+    @media (max-width: 900px) {
+      .container-custom {
+        padding: 12px 2px;
+      }
+
+      h1 {
+        font-size: 1.3rem;
+      }
+
+      .table {
+        font-size: 0.9rem;
+      }
+
+      .flex-form-row {
+        flex-direction: column;
+        gap: 8px;
+      }
+    }
+
+    /* 优化Cookie设置弹窗宽度和表格列样式（更宽且不省略） */
+    #cookieSettingsModal .modal-dialog.modal-lg {
+      max-width: 1200px;
+    }
+
+    #cookieSettingsModal .table th,
+    #cookieSettingsModal .table td {
+      white-space: nowrap;
+      text-overflow: unset;
+      overflow: visible;
+      max-width: unset;
+    }
+
+    #cookieSettingsModal .table {
+      table-layout: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container-custom">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h1 class="mb-0">卡密生成与管理</h1>
+      <div>
+        <a href="cookie.html" class="btn btn-outline-primary me-2">Cookie管理</a>
+        <a href="domain.html" class="btn btn-outline-success me-2">域名管理</a>
+        <a href="selector.html" class="btn btn-outline-success me-2">选择器管理</a>
+        <button class="btn btn-warning me-2" onclick="showPwdModal()">修改密码</button>
+        <a href="/logout" class="btn btn-outline-danger">退出登录</a>
+      </div>
+    </div>
+    <div class="mb-4">
+      <div class="d-flex align-items-center mb-2">
+        <h5 class="mb-0 me-3">公告</h5>
+        <button class="btn btn-outline-secondary btn-sm" id="editNoticeBtn">编辑公告</button>
+      </div>
+      <div id="noticeContent" class="alert alert-info py-2 px-3 mb-0" style="min-height:40px;"></div>
+      <div id="noticeEditBox" style="display:none;" class="mt-2">
+        <textarea id="noticeInput" class="form-control mb-2" rows="2"></textarea>
+        <button class="btn btn-primary btn-sm" id="saveNoticeBtn">保存公告</button>
+        <button class="btn btn-secondary btn-sm ms-2" id="cancelNoticeBtn">取消</button>
+        <span id="noticeMsg" class="ms-3"></span>
+      </div>
+    </div>
+    <form id="generateForm" class="flex-form-row mb-4">
+      <div>
+        <label for="count" class="form-label">生成数量</label>
+        <input type="number" class="form-control" id="count" value="1" min="1" max="100" required>
+      </div>
+      <div>
+        <label for="machineNum" class="form-label">绑定机器数量</label>
+        <input type="number" class="form-control" id="machineNum" value="1" min="1" max="100" required>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary">生成卡密</button>
+        <span id="msg"></span>
+      </div>
+    </form>
+
+    <div id="generatedCodes" style="display:none;">
+      <div class="alert alert-success py-2 px-3 mb-3">
+        <strong>已生成卡密：</strong>
+        <span id="codesList" style="word-break:break-all;"></span>
+      </div>
+    </div>
+
+    <h2 class="mt-4 mb-3">卡密列表</h2>
+    <form id="filterForm" class="flex-form-row mb-3">
+      <input type="text" class="form-control" id="filterCode" placeholder="卡密关键词">
+      <input type="text" class="form-control" id="remark" placeholder="备注">
+      <select class="form-select" id="filterActive">
+        <option value="">激活状态(全部)</option>
+        <option value="1">已激活</option>
+        <option value="0">未激活</option>
+      </select>
+      <select class="form-select" id="filterDisabled">
+        <option value="">卡密状态(全部)</option>
+        <option value="0">正常</option>
+        <option value="1">禁用</option>
+      </select>
+      <select class="form-select" id="filterExpire">
+        <option value="">cookie状态(全部)</option>
+        <option value="expired">已过期</option>
+        <option value="not_expired">未过期</option>
+      </select>
+      <div>
+        <button type="submit" class="btn btn-outline-primary btn-sm">查询</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="resetBtn">重置</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <div class="mb-2 d-flex justify-content-between align-items-center">
+        <div>
+          <button class="btn btn-danger btn-sm" id="batchDeleteBtn" disabled>批量删除</button>
+          <!-- <button class="btn btn-warning btn-sm ms-2" id="batchResetBtn" disabled>批量重置</button> -->
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="selectAll">
+          <label class="form-check-label" for="selectAll">全选</label>
+        </div>
+      </div>
+      <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th></th>
+            <th class="text-nowrap">序号</th>
+            <th>卡密</th>
+            <th class="text-nowrap">激活状态</th>
+            <th class="text-nowrap">创建时间</th>
+            <th class="text-nowrap">激活时间</th>
+            <th>设定数量</th>
+            <th>激活数量</th>
+            <th>备注</th>
+            <th class="text-nowrap">卡密状态</th>
+            <th class="text-nowrap">cookie信息/激活时间/过期时间</th>
+            <!-- <th class="text-nowrap">cookie状态</th> -->
+            <th class="text-nowrap">操作</th>
+          </tr>
+        </thead>
+        <tbody id="kamiTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    async function fetchKamiList(params = {}) {
+      const query = new URLSearchParams(params).toString();
+      const res = await fetch('/api/kami' + (query ? '?' + query : ''));
+      const data = await res.json();
+      const tbody = document.getElementById('kamiTableBody');
+      tbody.innerHTML = '';
+      const filterExpire = document.getElementById('filterExpire').value;
+      const now = new Date();
+      // 过滤逻辑
+      let list = data.list;
+      if (filterExpire) {
+        list = list.filter(row => {
+          let hasExpired = false;
+          if (Array.isArray(row.cookies) && row.cookies.length > 0) {
+            for (const c of row.cookies) {
+              if (c.expire_at) {
+                let expireStr = c.expire_at;
+                if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expireStr)) expireStr += ':00';
+                const expireDate = new Date(expireStr.replace('T', ' '));
+                if (expireDate < now) {
+                  hasExpired = true;
+                  break;
+                }
+              }
+            }
+          }
+          return filterExpire === 'expired' ? hasExpired : !hasExpired;
+        });
+      }
+      list.forEach((row, index) => {
+        const remarks = row.remarks || '';
+        const remarksHtml = remarks
+          ? `${remarks} <button class="btn btn-link btn-sm p-0" onclick="editRemark('${row.code}', '${remarks}')">编辑</button>`
+          : `<button class="btn btn-link btn-sm p-0" onclick="editRemark('${row.code}', '')">添加</button>`;
+
+        const editExpireBtnHtml = row.is_active ? `<button class="btn btn-link btn-sm p-0 ms-1" onclick="editExpireAt('${row.code}', '${row.expire_at || ''}')">修改</button>` : '';
+
+        let cookieInfo = '';
+        if (Array.isArray(row.cookies) && row.cookies.length > 0) {
+          cookieInfo = row.cookies.map(c => {
+            const account = c.account_info || '-';
+            const active = c.active_at ? c.active_at.replace('T', ' ').slice(0, 19) : '-';
+            let expire = c.expire_at ? c.expire_at.replace('T', ' ').slice(0, 19) : '-';
+            let expireHtml = expire;
+            if (c.expire_at) {
+              let expireStr = c.expire_at;
+              if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expireStr)) {
+                expireStr += ':00';
+              }
+              const now = new Date();
+              const expireDate = new Date(expireStr.replace('T', ' '));
+              if (expireDate < now) {
+                expireHtml = `<span style='color:#dc3545;font-weight:bold;'>${expire}</span>`;
+              }
+            }
+            const editBtn = c.id ? ` <button class='btn btn-link btn-sm p-0' onclick='showEditCookieExpireModal(${c.id}, "${c.expire_at || ''}", "${c.account_info || ''}", "${c.website_info || ''}", "${row.code}")'>修改</button>` : '';
+            return `<span style='white-space:nowrap;'>【${account}】：${active} / ${expireHtml}${editBtn}</span>`;
+          }).join('<br>');
+        } else {
+          cookieInfo = '<span class="text-secondary">未绑定</span>';
+        }
+
+        // 过期状态列
+        let expiredStatus = '<span class="text-success">未过期</span>';
+        if (Array.isArray(row.cookies) && row.cookies.length > 0) {
+          for (const c of row.cookies) {
+            if (c.expire_at) {
+              let expireStr = c.expire_at;
+              if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expireStr)) expireStr += ':00';
+              const expireDate = new Date(expireStr.replace('T', ' '));
+              if (expireDate < now) {
+                expiredStatus = '<span class="text-danger">已过期</span>';
+                break;
+              }
+            }
+          }
+        }
+        // <td class="text-nowrap">${expiredStatus}</td>
+        tbody.innerHTML += `<tr>
+          <td><input type="checkbox" class="kami-checkbox" value="${row.code}"></td>
+          <td class="text-nowrap">${index + 1}</td>
+          <td style="font-family:monospace; word-break: break-all; min-width: 82px;">${row.code}</td>
+          <td class="text-nowrap">${row.is_active ? '<span class="text-success">已激活</span>' : '<span class="text-secondary">未激活</span>'}</td>
+          <td class="text-nowrap">${row.created_at ? row.created_at.replace('T', ' ').slice(0, 19) : ''}</td>
+          <td class="text-nowrap">${row.activated_at ? row.activated_at.replace('T', ' ').slice(0, 19) : ''}</td>
+          <td class="text-nowrap">${row.machine_num || 0}[<button class="btn btn-link btn-sm p-0" onclick="changeMachineNum('${row.id}','${row.machine_band_num}')">修改</button>]</td>
+          <td class="text-nowrap">${row.machine_band_num || 0}[<button class="btn btn-link btn-sm p-0" onclick="cleanMachine('${row.id}')">清理</button>]</td>
+          <td style="max-width: 150px; word-break: break-all;">${remarksHtml}</td>
+          <td class="text-nowrap">${row.disabled ? '<span class="status-disabled">禁用</span>' : '<span class="status-normal">正常</span>'}</td>
+          <td style="min-width: 180px; white-space:nowrap; overflow-x:auto;">${cookieInfo}</td>
+          <td class="text-nowrap">
+            <button class="btn btn-sm btn-outline-info btn-status me-1" onclick="showCookieSettings('${row.code}')">Cookie设置</button>
+            <button class="btn btn-sm btn-outline-${row.disabled ? 'success' : 'danger'} btn-status me-1" onclick="setStatus('${row.code}', ${!row.disabled})">${row.disabled ? '启用' : '禁用'}</button>
+            <button class="btn btn-sm btn-outline-danger btn-status" onclick="deleteKami('${row.code}')">删除</button>
+          </td>
+        </tr>`;
+      });
+      bindCheckboxEvents();
+    }
+
+    function changeMachineNum(id, machineBandNum) {
+      const machineNum = prompt('请输入新的机器数量：');
+      if (machineNum === null) return;
+      if (isNaN(parseInt(machineNum))) {
+        alert('请输入一个有效的整数');
+        return;
+      }
+      if (parseInt(machineNum) < 0) {
+        alert('机器数量不能小于0');
+        return;
+      }
+      if (parseInt(machineNum) < parseInt(machineBandNum)) {
+        alert('机器数量小于已绑定数量时，请先清理');
+        return;
+      }
+      fetch('/api/change-machine-num', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, machineNum: parseInt(machineNum) })
+      }).then(res => res.json()).then(data => {
+        if (data.success) {
+          alert('修改成功');
+          fetchKamiList();
+        } else {
+          alert(data.error || '修改失败');
+        }
+      });
+    }
+
+    function cleanMachine(id) {
+      if (!confirm('确认清理该卡密绑定的所有机器吗？')) return;
+      fetch('/api/clean-machine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      }).then(res => res.json()).then(data => {
+        if (data.success) {
+          alert('清理成功');
+          fetchKamiList();
+        } else {
+          alert(data.error || '清理失败');
+        }
+      });
+    }
+
+    document.getElementById('generateForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const count = parseInt(document.getElementById('count').value);
+      const machineNum = document.getElementById("machineNum").value
+      const msg = document.getElementById('msg');
+      const codesDiv = document.getElementById('generatedCodes');
+      const codesList = document.getElementById('codesList');
+      msg.textContent = '';
+      codesDiv.style.display = 'none';
+      codesList.textContent = '';
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ count, machineNum: machineNum === undefined ? 1 : parseInt(machineNum) })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          msg.textContent = `成功生成${data.codes.length}个卡密！`;
+          msg.className = 'text-success';
+          if (data.codes && data.codes.length > 0) {
+            codesDiv.style.display = '';
+            codesList.textContent = data.codes.join('  ');
+          }
+          fetchKamiList();
+        } else {
+          msg.textContent = data.error || '生成失败';
+          msg.className = 'text-danger';
+        }
+      } catch (err) {
+        msg.textContent = '网络错误';
+        msg.className = 'text-danger';
+      }
+    });
+
+    document.getElementById('filterForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      fetchKamiList({
+        code: document.getElementById('filterCode').value.trim(),
+        remark: document.getElementById('remark').value.trim(),
+        active: document.getElementById('filterActive').value,
+        disabled: document.getElementById('filterDisabled').value
+        // 过期状态不传给后端，前端过滤
+      });
+    });
+    document.getElementById('resetBtn').addEventListener('click', function () {
+      document.getElementById('filterCode').value = '';
+      document.getElementById('remark').value = '';
+      document.getElementById('filterActive').value = '';
+      document.getElementById('filterDisabled').value = '';
+      document.getElementById('filterExpire').value = '';
+      fetchKamiList();
+    });
+
+    async function setStatus(code, disabled) {
+      if (!confirm(disabled ? '确定要禁用该卡密？' : '确定要启用该卡密？')) return;
+      const res = await fetch('/api/kami/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, disabled })
+      });
+      if (res.ok) {
+        fetchKamiList();
+      } else {
+        showToast('操作失败', 'danger');
+      }
+    }
+
+    async function deleteKami(code) {
+      if (!confirm('确定要删除该卡密吗？')) return;
+      const res = await fetch('/api/kami/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      if (res.ok) {
+        fetchKamiList();
+      } else {
+        showToast('删除失败', 'danger');
+      }
+    }
+
+    function bindCheckboxEvents() {
+      const checkboxes = document.querySelectorAll('.kami-checkbox');
+      const selectAll = document.getElementById('selectAll');
+      const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+      // const batchResetBtn = document.getElementById('batchResetBtn');
+      selectAll.checked = false;
+      batchDeleteBtn.disabled = true;
+      // batchResetBtn.disabled = true;
+      checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateBatchButtons);
+      });
+      selectAll.addEventListener('change', function () {
+        checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+        updateBatchButtons();
+      });
+      function updateBatchButtons() {
+        const checked = Array.from(checkboxes).some(cb => cb.checked);
+        batchDeleteBtn.disabled = !checked;
+        // batchResetBtn.disabled = !checked;
+      }
+    }
+
+    document.getElementById('batchDeleteBtn').addEventListener('click', async function () {
+      const checked = Array.from(document.querySelectorAll('.kami-checkbox:checked'));
+      if (checked.length === 0) return;
+      if (!confirm('确定要批量删除选中的卡密吗？')) return;
+      const codes = checked.map(cb => cb.value);
+      const res = await fetch('/api/kami/delete-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes })
+      });
+      if (res.ok) {
+        fetchKamiList();
+      } else {
+        showToast('批量删除失败', 'danger');
+      }
+    });
+
+    // document.getElementById('batchResetBtn').addEventListener('click', async function () {
+    //   const checked = Array.from(document.querySelectorAll('.kami-checkbox:checked'));
+    //   if (checked.length === 0) return;
+    //   if (!confirm('确定要批量重置选中的卡密吗？这将清空激活状态、激活时间和机器码。')) return;
+
+    //   // 获取选中卡密的code
+    //   const codes = checked.map(cb => cb.value);
+
+    //   const res = await fetch('/api/kami/reset-batch', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ codes })
+    //   });
+
+    //   if (res.ok) {
+    //     const data = await res.json();
+    //     if (data.success) {
+    //       showToast(`成功重置了 ${data.updated} 个卡密`, 'success');
+    //       fetchKamiList();
+    //     } else {
+    //       showToast('批量重置失败', 'danger');
+    //     }
+    //   } else {
+    //     showToast('批量重置失败', 'danger');
+    //   }
+    // });
+
+    async function loadNotice() {
+      const res = await fetch('/api/notice');
+      const data = await res.json();
+      document.getElementById('noticeContent').textContent = data.content || '暂无公告';
+      document.getElementById('noticeInput').value = data.content || '';
+    }
+    document.getElementById('editNoticeBtn').onclick = function () {
+      document.getElementById('noticeEditBox').style.display = '';
+      document.getElementById('editNoticeBtn').style.display = 'none';
+    };
+    document.getElementById('cancelNoticeBtn').onclick = function () {
+      document.getElementById('noticeEditBox').style.display = 'none';
+      document.getElementById('editNoticeBtn').style.display = '';
+      document.getElementById('noticeMsg').textContent = '';
+    };
+    document.getElementById('saveNoticeBtn').onclick = async function () {
+      const content = document.getElementById('noticeInput').value;
+      const msg = document.getElementById('noticeMsg');
+      msg.textContent = '';
+      const res = await fetch('/api/notice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      const data = await res.json();
+      if (data.code === 0) {
+        msg.textContent = '保存成功';
+        msg.className = 'text-success ms-3';
+        loadNotice();
+        setTimeout(() => {
+          document.getElementById('noticeEditBox').style.display = 'none';
+          document.getElementById('editNoticeBtn').style.display = '';
+          msg.textContent = '';
+        }, 800);
+      } else {
+        msg.textContent = data.error || '保存失败';
+        msg.className = 'text-danger ms-3';
+      }
+    };
+    loadNotice();
+
+    let expireModal = null;
+    let kamiCodeToUpdate = null;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      expireModal = new bootstrap.Modal(document.getElementById('editExpireModal'));
+
+      document.getElementById('saveExpireTimeBtn').addEventListener('click', async () => {
+        const newDateValue = document.getElementById('newExpireTime').value;
+        if (!newDateValue) {
+          showToast('请选择一个日期和时间。', 'danger');
+          return;
+        }
+
+        // Format YYYY-MM-DDTHH:mm to YYYY-MM-DD HH:mm:ss
+        const formattedDate = newDateValue.replace('T', ' ') + ':00';
+
+        const res = await fetch('/api/kami/expire', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: kamiCodeToUpdate, expire_at: formattedDate })
+        });
+
+        if (res.ok) {
+          expireModal.hide();
+          fetchKamiList();
+        } else {
+          showToast('更新到期时间失败', 'danger');
+        }
+      });
+    });
+
+    window.editExpireAt = function (code, currentExpireAt) {
+      kamiCodeToUpdate = code;
+      document.getElementById('expireKamiCode').textContent = code;
+
+      // Format current time for the input. Default to 24 hours from now if not set.
+      let defaultValue = '';
+      if (currentExpireAt) {
+        defaultValue = currentExpireAt.replace(' ', 'T').slice(0, 16);
+      } else {
+        const now = new Date();
+        now.setHours(now.getHours() + 24);
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        defaultValue = now.toISOString().slice(0, 16);
+      }
+      document.getElementById('newExpireTime').value = defaultValue;
+
+      expireModal.show();
+    }
+
+    window.editRemark = async function (code, currentRemark) {
+      const newRemark = prompt('请输入备注信息：', currentRemark);
+      if (newRemark !== null) {
+        const res = await fetch('/api/kami/remarks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, remarks: newRemark })
+        });
+        if (res.ok) {
+          fetchKamiList();
+        } else {
+          showToast('更新备注失败', 'danger');
+        }
+      }
+    }
+
+    fetchKamiList();
+  </script>
+
+  <!-- Modal -->
+  <div class="modal fade" id="editExpireModal" tabindex="-1" aria-labelledby="editExpireModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editExpireModalLabel">修改到期时间</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>为卡密: <strong id="expireKamiCode"></strong></p>
+          <label for="newExpireTime" class="form-label">新的到期时间:</label>
+          <input type="datetime-local" class="form-control" id="newExpireTime">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="saveExpireTimeBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div id="pwdModal"
+    style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:#0005;z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;padding:24px;border-radius:8px;min-width:300px;">
+      <h5>修改密码</h5>
+      <input type="password" id="oldPwd" class="form-control mb-2" placeholder="原密码">
+      <input type="password" id="newPwd" class="form-control mb-2" placeholder="新密码">
+      <button class="btn btn-primary" onclick="changePwd()">提交</button>
+      <button class="btn btn-secondary" onclick="hidePwdModal()">取消</button>
+      <div id="pwdMsg" class="mt-2 text-danger"></div>
+    </div>
+  </div>
+
+  <!-- Cookie设置模态框 -->
+  <div class="modal fade" id="cookieSettingsModal" tabindex="-1" aria-labelledby="cookieSettingsModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="cookieSettingsModalLabel">Cookie设置</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>为卡密: <strong id="cookieKamiCode"></strong></p>
+
+          <!-- 添加新关联 -->
+          <div class="card mb-3">
+            <div class="card-header">
+              <h6 class="mb-0">绑定账号cookie</h6>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-5">
+                  <label for="domain" class="form-label">域名</label>
+                  <div class="dropdown">
+                    <button type="button" class="btn btn-outline-secondary form-control text-left dropdown-toggle"
+                      id="domainDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
+                      请选择域名
+                    </button>
+                    <input type="hidden" id="domain" required>
+                    <div class="dropdown-menu w-100 max-h-50 overflow-y-auto" aria-labelledby="domainDropdownButton">
+                      <div class="p-2 bg-light border-bottom">
+                        <input type="text" class="form-control form-control-sm" placeholder="搜索域名..." id="domainSearch">
+                      </div>
+                      <div id="domainDropdownMenu" class="p-1">
+                        <!-- 域名选项将通过JavaScript动态添加 -->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-5">
+                  <label for="account" class="form-label">账号信息</label>
+                  <select class="form-control" id="account" required>
+                    <option value="">请选择账号</option>
+                  </select>
+                </div>
+              </div>
+              <div class="row mt-2">
+                <div class="col-md-5">
+                  <label for="durationType" class="form-label">有效期类别</label>
+                  <select class="form-control" id="durationType">
+
+                    <option value="h">时</option>
+                    <option value="d" selected>天</option>
+                  </select>
+                </div>
+                <div class="col-md-5">
+                  <label for="duration" class="form-label">有效期</label>
+                  <input type="number" class="form-control" id="duration">
+                </div>
+                <div class="col-md-5">
+                  <label>&nbsp;</label>
+                  <div>
+                    <button class="btn btn-primary" onclick="addAccountCookie()">添加cookies</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 现有关联列表 -->
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0">已绑定cookies列表</h6>
+            </div>
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>账号信息</th>
+                      <th>网站信息</th>
+                      <th>有效期类别</th>
+                      <th>有效期</th>
+                      <th>有效期至</th>
+                      <th>创建时间</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="accountCookieList">
+                    <!-- 动态加载 -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    // 全局变量
+    let domainDropdownInstance = null;
+    let allDomains = [];
+
+    // 初始化下拉框
+    function initDomainDropdown() {
+      // 确保Bootstrap已加载
+      if (window.bootstrap) {
+        // 获取或创建下拉框实例
+        const dropdownElement = document.getElementById('domainDropdownButton').closest('.dropdown');
+        if (dropdownElement) {
+          domainDropdownInstance = new bootstrap.Dropdown(dropdownElement);
+        }
+
+        // 添加搜索事件监听
+        document.getElementById('domainSearch').addEventListener('input', function () {
+          const searchText = this.value.toLowerCase().trim();
+          filterDomainDropdown(searchText);
+        });
+      }
+    }
+
+    // 渲染域名下拉菜单
+    function renderDomainDropdown(domains) {
+      const menuContainer = document.getElementById('domainDropdownMenu');
+      menuContainer.innerHTML = '';
+
+      if (domains.length === 0) {
+        const emptyItem = document.createElement('button');
+        emptyItem.className = 'dropdown-item text-muted';
+        emptyItem.disabled = true;
+        emptyItem.textContent = '无匹配的域名';
+        menuContainer.appendChild(emptyItem);
+        return;
+      }
+
+      domains.forEach(item => {
+        const domainItem = document.createElement('button');
+        domainItem.className = 'dropdown-item text-truncate';
+        domainItem.type = 'button';
+        domainItem.textContent = item.name;
+        domainItem.dataset.value = item.id;
+
+        domainItem.addEventListener('click', function () {
+          const domainValue = this.dataset.value;
+
+          document.getElementById('domain').value = domainValue;
+          updateDomainButtonText(item.name);
+          loadAccountOptions(domainValue)
+          // 关闭下拉框
+          if (domainDropdownInstance) {
+            domainDropdownInstance.hide();
+          }
+        });
+
+        menuContainer.appendChild(domainItem);
+      });
+    }
+
+    // 更新下拉按钮文本
+    function updateDomainButtonText(domain) {
+      const button = document.getElementById('domainDropdownButton');
+      button.textContent = domain || '请选择域名';
+      // 添加选中样式
+      button.classList.remove('btn-outline-secondary');
+      button.classList.add('btn-secondary');
+    }
+
+    // 筛选域名下拉菜单
+    function filterDomainDropdown(searchText) {
+      if (!searchText) {
+        renderDomainDropdown(allDomains);
+      } else {
+        const filtered = allDomains.filter(item =>
+          item.name.toLowerCase().includes(searchText)
+        );
+        renderDomainDropdown(filtered);
+      }
+    }
+
+    // 在页面加载完成后初始化下拉框
+    document.addEventListener('DOMContentLoaded', function () {
+      initDomainDropdown();
+    });
+
+    // 加载域名列表
+    async function loadDomains() {
+      try {
+        const res = await fetch('/api/domain/list');
+        const data = await res.json();
+        allDomains = data.list || [];
+
+        // 渲染域名列表
+        renderDomainDropdown(allDomains);
+      } catch (error) {
+        console.error('加载域名失败:', error);
+      }
+    }
+    loadDomains()
+    function showPwdModal() {
+      document.getElementById('pwdModal').style.display = 'flex';
+    }
+    function hidePwdModal() {
+      document.getElementById('pwdModal').style.display = 'none';
+      document.getElementById('pwdMsg').innerText = '';
+      document.getElementById('oldPwd').value = '';
+      document.getElementById('newPwd').value = '';
+    }
+    function changePwd() {
+      const oldPwd = document.getElementById('oldPwd').value;
+      const newPwd = document.getElementById('newPwd').value;
+      fetch('/api/change-pwd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPwd, newPwd })
+      }).then(r => r.json()).then(res => {
+        if (res.success) {
+          document.getElementById('pwdMsg').innerText = '修改成功，请重新登录';
+          setTimeout(() => { location.href = '/logout'; }, 1000);
+        } else {
+          document.getElementById('pwdMsg').innerText = res.msg;
+        }
+      });
+    }
+  </script>
+
+  <script>
+    // Cookie设置相关变量
+    let cookieSettingsModal = null;
+    let currentKamiCode = null;
+    let editAccountCookieModal = null;
+    let currentEditAccountCookieId = null;
+    let changeAccountModal = null;
+    let currentKamiCookieIdToChange = null;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      // 初始化Cookie设置模态框
+      cookieSettingsModal = new bootstrap.Modal(document.getElementById('cookieSettingsModal'));
+
+      // 初始化编辑账号Cookie关联模态框
+      editAccountCookieModal = new bootstrap.Modal(document.getElementById('editAccountCookieModal'));
+
+      // 初始化修改绑定账号模态框
+      changeAccountModal = new bootstrap.Modal(document.getElementById('changeAccountModal'));
+
+      // 监听域名选择变化
+      document.getElementById('domain').addEventListener('change', function () {
+        loadAccountOptions(this.value);
+      });
+
+      // 监听编辑账号Cookie关联保存按钮
+      document.getElementById('saveEditAccountCookieBtn').addEventListener('click', async () => {
+        const accountInfo = document.getElementById('editAccountInfo').value.trim();
+        const websiteInfo = document.getElementById('editWebsiteInfo').value.trim();
+        let expireAt = document.getElementById('editAccountExpireAt').value;
+
+        // 补全expireAt为:00
+        if (expireAt && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(expireAt)) {
+          expireAt += ':00';
+        }
+
+        if (!accountInfo || !websiteInfo) {
+          showToast('请填写账号信息和网站信息', 'danger');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/kami-account-cookie/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: currentEditAccountCookieId,
+              account_info: accountInfo,
+              website_info: websiteInfo,
+              expire_at: expireAt || null
+            })
+          });
+
+          const data = await response.json();
+
+          if (data.error) {
+            showToast('更新失败: ' + data.error, 'danger');
+            return;
+          }
+
+          showToast('更新成功', 'success');
+          editAccountCookieModal.hide();
+          loadAccountCookieList(currentKamiCode);
+
+        } catch (error) {
+          console.error('更新失败:', error);
+          showToast('更新失败', 'danger');
+        }
+      });
+
+      // 监听过期时间选择变化
+      // document.getElementById('durationType').addEventListener('change', function () {
+      //   document.getElementById('duration').style.display = this.value === 'custom' ? '' : 'none';
+      // });
+
+      // 监听保存修改绑定按钮
+      document.getElementById('saveAccountChangeBtn').addEventListener('click', saveAccountChange);
+    });
+
+    // 显示Cookie设置模态框
+    window.showCookieSettings = function (kamiCode) {
+      currentKamiCode = kamiCode;
+      document.getElementById('cookieKamiCode').textContent = kamiCode;
+
+      // 清空表单
+      document.getElementById('domain').value = '';
+      document.getElementById('account').innerHTML = '<option value="">请先选择域名</option>';
+      // document.getElementById('expireAtType').value = '';
+      // document.getElementById('expireAtCustom').value = '';
+
+      // 加载现有关联
+      loadAccountCookieList(kamiCode);
+
+      cookieSettingsModal.show();
+    }
+
+    // 加载账号选项
+    async function loadAccountOptions(domainId) {
+      if (!domainId.trim()) {
+        document.getElementById('account').innerHTML = '<option value="">请先选择域名</option>';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/account-cookie/list?domain_id=${encodeURIComponent(domainId)}`);
+        const data = await response.json();
+
+        const select = document.getElementById('account');
+        select.innerHTML = '<option value="">请选择账号</option>';
+
+        if (data.list && data.list.length > 0) {
+          data.list.forEach(item => {
+            select.innerHTML += `<option value="${item.id}">${item.account_info}</option>`;
+          });
+        } else {
+          select.innerHTML = '<option value="">未找到相关账号</option>';
+        }
+      } catch (error) {
+        console.error('加载账号选项失败:', error);
+        document.getElementById('account').innerHTML = '<option value="">加载失败</option>';
+      }
+    }
+
+    // 加载现有关联列表
+    async function loadAccountCookieList(kamiCode) {
+      try {
+        const response = await fetch(`/api/kami-account-cookie/by-kami/${kamiCode}`);
+        const data = await response.json();
+
+        const tbody = document.getElementById('accountCookieList');
+        tbody.innerHTML = '';
+
+        if (data.list && data.list.length > 0) {
+          data.list.forEach(item => {
+            // const expireAt = item.expire_at ? item.expire_at.replace('T', ' ').slice(0, 19) : '-';
+            const createdAt = item.created_at ? item.created_at.replace('T', ' ').slice(0, 19) : '-';
+            const isDisabled = item.disabled === 1;
+
+            tbody.innerHTML += `
+              <tr>
+                <td>${item.account_info || '-'}</td>
+                <td>${item.website_info || '-'}</td>
+                <td>${item.duration_type == "h" ? "小时" : "天"}</td>
+                <td>${item.duration}</td>
+                <td>${item.active_state == 0 ? '-' : (item.active_at ? item.active_at.replace('T', ' ').slice(0, 19) : '-') + '至' + (item.expire_at ? item.expire_at.replace('T', ' ').slice(0, 19) : '-')} </td>
+                <td>${createdAt}</td>
+                <td class="text-nowrap">${isDisabled ? '<span class="text-danger">禁用</span>' : '<span class="text-success">启用</span>'}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-primary me-1" onclick="showChangeAccountModal(${item.id}, '${item.website_info}', '${item.domain_id}')">修改账号</button>
+                  <button class="btn btn-sm btn-outline-${isDisabled ? 'success' : 'danger'} me-1" onclick="toggleAccountCookieStatus(${item.id}, ${!isDisabled})">${isDisabled ? '启用' : '禁用'}</button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteAccountCookie(${item.id})">删除</button>
+                </td>
+              </tr>
+            `;
+          });
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center">暂未绑定cookies</td></tr>';
+        }
+      } catch (error) {
+        console.error('加载关联列表失败:', error);
+        document.getElementById('accountCookieList').innerHTML = '<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>';
+      }
+    }
+
+    // 添加账号Cookie关联
+    async function addAccountCookie() {
+      const accountCookieId = document.getElementById('account').value;
+      const durationType = document.getElementById('durationType').value;
+      const duration = document.getElementById('duration').value.trim();
+
+      if (!accountCookieId) {
+        showToast('请选择账号', 'danger');
+        return;
+      }
+      if (!currentKamiCode) {
+        showToast('卡密代码无效', 'danger');
+        return;
+      }
+
+      if (!duration) {
+        showToast('有效期无效', 'danger');
+        return;
+      }
+      try {
+        const response = await fetch('/api/kami-account-cookie/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kami_code: currentKamiCode,
+            account_cookie_id: parseInt(accountCookieId),
+            duration_type: durationType,
+            duration: duration
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          showToast('添加失败: ' + data.error, 'danger');
+          return;
+        }
+
+        showToast('添加成功', 'success');
+
+        // 清空表单并重新加载列表
+        document.getElementById('domain').value = '';
+        document.getElementById('account').value = '';
+        document.getElementById('durationType').value = 'd';
+        document.getElementById('duration').value = '';
+        loadAccountCookieList(currentKamiCode);
+
+      } catch (error) {
+        console.error('添加关联失败:', error);
+        showToast('添加失败: ' + error.message, 'danger');
+      }
+    }
+
+    // 删除账号Cookie关联
+    window.deleteAccountCookie = async function (id) {
+      if (!confirm('确定要删除这个cookies吗？')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/kami-account-cookie/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          showToast('删除失败: ' + data.error, 'danger');
+          return;
+        }
+
+        showToast('删除成功', 'success');
+        loadAccountCookieList(currentKamiCode);
+
+      } catch (error) {
+        console.error('删除关联失败:', error);
+        showToast('删除失败', 'danger');
+      }
+    }
+
+    // 切换账号Cookie关联状态
+    window.toggleAccountCookieStatus = async function (id, disabled) {
+      const action = disabled ? '禁用' : '启用';
+      if (!confirm(`确定要${action}这个cookies吗？`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/kami-account-cookie/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id, disabled: disabled ? 1 : 0 })
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          showToast(`${action}失败: ` + data.error, 'danger');
+          return;
+        }
+
+        showToast(`${action}成功`, 'success');
+        loadAccountCookieList(currentKamiCode);
+
+      } catch (error) {
+        console.error(`${action}关联失败:`, error);
+        showToast(`${action}失败`, 'danger');
+      }
+    }
+
+    // 显示修改绑定账号模态框
+    window.showChangeAccountModal = async function (kamiCookieId, websiteInfo, domainId) {
+      currentKamiCookieIdToChange = kamiCookieId;
+      document.getElementById('changeAccountKamiCookieId').value = kamiCookieId;
+      document.getElementById('changeAccountWebsite').textContent = websiteInfo;
+
+      const select = document.getElementById('newAccountSelect');
+      select.innerHTML = '<option>正在加载账号...</option>';
+
+      try {
+        const response = await fetch(`/api/account-cookie/list?domain_id=${encodeURIComponent(domainId)}`);
+        const data = await response.json();
+
+        select.innerHTML = '';
+        if (data.list && data.list.length > 0) {
+          data.list.forEach(item => {
+            select.innerHTML += `<option value="${item.id}">${item.account_info}</option>`;
+          });
+        } else {
+          select.innerHTML = '<option value="">该网站下无可用账号</option>';
+        }
+      } catch (error) {
+        console.error('加载账号列表失败:', error);
+        select.innerHTML = '<option value="">加载失败</option>';
+      }
+
+      changeAccountModal.show();
+    }
+
+    async function saveAccountChange() {
+      const newAccountCookieId = document.getElementById('newAccountSelect').value;
+      if (!newAccountCookieId) {
+        showToast('请选择一个新账号', 'danger');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/kami-account-cookie/change-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentKamiCookieIdToChange,
+            new_account_cookie_id: parseInt(newAccountCookieId)
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showToast('修改成功', 'success');
+          changeAccountModal.hide();
+          loadAccountCookieList(currentKamiCode);
+          fetchKamiList();
+        } else {
+          showToast(data.error || '修改失败', 'danger');
+        }
+      } catch (err) {
+        showToast('网络错误', 'danger');
+      }
+    }
+  </script>
+
+  <!-- 编辑卡密模态框 -->
+  <div class="modal fade" id="editKamiModal" tabindex="-1" aria-labelledby="editKamiModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editKamiModalLabel">编辑卡密</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>编辑卡密: <strong id="editKamiCode"></strong></p>
+
+          <div class="mb-3">
+            <label for="editPeriod" class="form-label">有效期</label>
+            <select class="form-select" id="editPeriod">
+              <option value="1d">1天</option>
+              <option value="7d">7天</option>
+              <option value="1m">1个月</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label for="editRemarks" class="form-label">备注</label>
+            <textarea class="form-control" id="editRemarks" rows="3" placeholder="请输入备注信息"></textarea>
+          </div>
+
+          <div class="mb-3">
+            <label for="editExpireAt" class="form-label">到期时间</label>
+            <input type="datetime-local" class="form-control" id="editExpireAt">
+            <div class="form-text">留空表示不修改到期时间</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="saveEditKamiBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 显示编辑卡密模态框
+    window.showEditKami = function (code, period, remarks) {
+      kamiCodeToEdit = code;
+      document.getElementById('editKamiCode').textContent = code;
+      document.getElementById('editPeriod').value = period;
+      document.getElementById('editRemarks').value = remarks;
+      document.getElementById('editExpireAt').value = '';
+
+      editKamiModal.show();
+    }
+  </script>
+
+  <!-- 显示编辑账号Cookie关联模态框 -->
+  <div class="modal fade" id="editAccountCookieModal" tabindex="-1" aria-labelledby="editAccountCookieModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editAccountCookieModalLabel">编辑账号Cookie关联</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>编辑关联: <strong id="editAccountCookieId"></strong></p>
+
+          <div class="mb-3">
+            <label for="editAccountInfo" class="form-label">账号信息</label>
+            <input type="text" class="form-control" id="editAccountInfo" placeholder="请输入账号信息">
+          </div>
+
+          <div class="mb-3">
+            <label for="editWebsiteInfo" class="form-label">网站信息</label>
+            <input type="text" class="form-control" id="editWebsiteInfo" placeholder="请输入网站信息">
+          </div>
+
+          <div class="mb-3">
+            <label for="editAccountExpireAt" class="form-label">过期时间</label>
+            <input type="datetime-local" class="form-control" id="editAccountExpireAt" placeholder="请选择过期时间，默认7天">
+            <div class="form-text">请选择过期时间，默认7天</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="saveEditAccountCookieBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 显示编辑账号Cookie关联模态框
+    window.editAccountCookie = function (id, accountInfo, websiteInfo, expireAt) {
+      currentEditAccountCookieId = id;
+      document.getElementById('editAccountCookieId').textContent = id;
+      document.getElementById('editAccountInfo').value = accountInfo || '';
+      document.getElementById('editWebsiteInfo').value = websiteInfo || '';
+      document.getElementById('editAccountExpireAt').value = expireAt ? expireAt.replace(' ', 'T').slice(0, 16) : '';
+
+      editAccountCookieModal.show();
+    }
+  </script>
+
+  <!-- 修改绑定账号模态框 -->
+  <div class="modal fade" id="changeAccountModal" tabindex="-1" aria-labelledby="changeAccountModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="changeAccountModalLabel">修改绑定账号</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="changeAccountKamiCookieId">
+          <p>正在为网站 <strong id="changeAccountWebsite"></strong> 修改绑定的账号。</p>
+          <div class="mb-3">
+            <label for="newAccountSelect" class="form-label">选择新账号</label>
+            <select class="form-select" id="newAccountSelect">
+              <!-- Options will be loaded dynamically -->
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="saveAccountChangeBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 容器 左右居中，靠顶部显示 -->
+  <div class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 2000; margin-top:50px;">
+    <div id="globalToast" class="toast align-items-center text-white bg-primary border-0" role="alert"
+      aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="globalToastBody">
+          <!-- 提示内容 -->
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+          aria-label="Close"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // 全局美观提示
+    function showToast(msg, type = 'primary') {
+      const toastEl = document.getElementById('globalToast');
+      const toastBody = document.getElementById('globalToastBody');
+      toastBody.textContent = msg;
+      toastEl.className = `toast align-items-center text-white bg-${type} border-0`;
+      const toast = new bootstrap.Toast(toastEl, { delay: 2500 });
+      toast.show();
+    }
+  </script>
+
+  <!-- 新增的Cookie到期时间修改模态框 -->
+  <div class="modal fade" id="editCookieExpireModal" tabindex="-1" aria-labelledby="editCookieExpireModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editCookieExpireModalLabel">修改Cookie到期时间</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editCookieId">
+          <input type="hidden" id="editCookieAccountInfo">
+          <input type="hidden" id="editCookieWebsiteInfo">
+          <input type="hidden" id="editCookieKamiCode">
+          <div class="mb-2"><strong>激活码：</strong><span id="editCookieKamiCodeShow"></span></div>
+          <div class="mb-2"><strong>账号：</strong><span id="editCookieAccountInfoShow"></span></div>
+          <div class="mb-2"><strong>网站：</strong><span id="editCookieWebsiteInfoShow"></span></div>
+          <label for="editCookieExpireAt" class="form-label">新的到期时间</label>
+          <input type="datetime-local" class="form-control" id="editCookieExpireAt">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-primary" id="saveEditCookieExpireBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let editCookieExpireModal = null;
+    document.addEventListener('DOMContentLoaded', function () {
+      editCookieExpireModal = new bootstrap.Modal(document.getElementById('editCookieExpireModal'));
+      document.getElementById('saveEditCookieExpireBtn').onclick = async function () {
+        const id = document.getElementById('editCookieId').value;
+        const val = document.getElementById('editCookieExpireAt').value;
+        const account_info = document.getElementById('editCookieAccountInfo').value;
+        const website_info = document.getElementById('editCookieWebsiteInfo').value;
+        const kami_code = document.getElementById('editCookieKamiCode').value;
+        if (!id || !val) {
+          showToast('请选择新的到期时间', 'danger');
+          return;
+        }
+        // 格式化为YYYY-MM-DD HH:mm:ss
+        const [date, time] = val.split('T');
+        if (!date || !time) {
+          showToast('时间格式有误', 'danger');
+          return;
+        }
+        const expire_at = `${date} ${time.length === 5 ? time + ':00' : time}`;
+        try {
+          const res = await fetch('/api/kami-account-cookie/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, account_info, website_info, expire_at })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast('修改成功', 'success');
+            editCookieExpireModal.hide();
+            fetchKamiList();
+          } else {
+            showToast(data.error || '修改失败', 'danger');
+          }
+        } catch (e) {
+          showToast('网络错误', 'danger');
+        }
+      }
+    });
+    window.showEditCookieExpireModal = function (id, expire_at, account_info, website_info, kami_code) {
+      document.getElementById('editCookieId').value = id;
+      let val = '';
+      if (expire_at) {
+        val = expire_at.replace(' ', 'T').slice(0, 16);
+      }
+      document.getElementById('editCookieExpireAt').value = val;
+      document.getElementById('editCookieAccountInfo').value = account_info || '';
+      document.getElementById('editCookieWebsiteInfo').value = website_info || '';
+      document.getElementById('editCookieKamiCode').value = kami_code || '';
+      document.getElementById('editCookieAccountInfoShow').textContent = account_info || '';
+      document.getElementById('editCookieWebsiteInfoShow').textContent = website_info || '';
+      document.getElementById('editCookieKamiCodeShow').textContent = kami_code || '';
+      editCookieExpireModal.show();
+    }
+  </script>
+</body>
+
+</html>

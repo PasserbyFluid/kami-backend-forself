@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>选择器管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa;
+        }
+
+        .container-custom {
+            max-width: 1800px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #0001;
+            padding: 32px 40px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 32px;
+        }
+
+        .table {
+            margin-top: 24px;
+        }
+
+        .form-label {
+            font-weight: 500;
+        }
+
+        .btn-action {
+            min-width: 60px;
+        }
+
+        #msg {
+            margin-left: 16px;
+            font-weight: bold;
+        }
+
+        .flex-form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .flex-form-row>* {
+            flex: 1 1 220px;
+            min-width: 120px;
+        }
+
+        @media (max-width: 900px) {
+            .container-custom {
+                padding: 12px 2px;
+            }
+
+            h1 {
+                font-size: 1.3rem;
+            }
+
+            .table {
+                font-size: 0.9rem;
+            }
+
+            .flex-form-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">选择器管理</h1>
+            <div>
+                <a href="index.html" class="btn btn-outline-primary me-2">卡密管理</a>
+                <a href="cookie.html" class="btn btn-outline-success me-2">Cookie管理</a>
+                <a href="domain.html" class="btn btn-outline-info me-2">域名管理</a>
+                
+            </div>
+        </div>
+        <form id="addForm" class="flex-form-row mb-4">
+            <div>
+                <label for="selector" class="form-label">选择器</label>
+                <input type="text" class="form-control" id="selector" required placeholder="如：.cookie-item, #session-id">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">添加</button>
+                <span id="msg"></span>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>选择器</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="selectorTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        let editingId = null;
+        
+        async function fetchSelectorList() {
+            const res = await fetch('/api/selector/list');
+            const data = await res.json();
+            const tbody = document.getElementById('selectorTableBody');
+            tbody.innerHTML = '';
+            data.list.forEach(row => {
+                tbody.innerHTML += `<tr>
+    <td>${row.id}</td>
+    <td>${row.selector}</td>
+    <td>${row.created_at ? row.created_at.replace('T', ' ').slice(0, 19) : ''}</td>
+    <td>
+      <button class="btn btn-sm btn-outline-warning btn-action me-1" onclick="editSelector(${row.id}, '${encodeURIComponent(row.selector)}')">编辑</button>
+      <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteSelector(${row.id})">删除</button>
+    </td>
+  </tr>`;
+            });
+        }
+        
+        document.getElementById('addForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const selector = document.getElementById('selector').value.trim();
+            const msg = document.getElementById('msg');
+            msg.textContent = '';
+            
+            if (!selector) {
+                msg.textContent = '选择器不能为空';
+                msg.className = 'text-danger';
+                return;
+            }
+            
+            try {
+                if (editingId) {
+                    // 修改
+                    const res = await fetch('/api/selector/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: editingId, selector })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        msg.textContent = '修改成功';
+                        msg.className = 'text-success';
+                        editingId = null;
+                        document.getElementById('addForm').reset();
+                        fetchSelectorList();
+                    } else {
+                        msg.textContent = result.error || '修改失败';
+                        msg.className = 'text-danger';
+                    }
+                } else {
+                    // 新增
+                    const res = await fetch('/api/selector/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ selector })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        msg.textContent = '添加成功';
+                        msg.className = 'text-success';
+                        document.getElementById('addForm').reset();
+                        fetchSelectorList();
+                    } else {
+                        msg.textContent = result.error || '添加失败';
+                        msg.className = 'text-danger';
+                    }
+                }
+            } catch (error) {
+                msg.textContent = '操作失败，请重试';
+                msg.className = 'text-danger';
+            }
+        });
+        
+        window.editSelector = function (id, selector) {
+            editingId = id;
+            document.getElementById('selector').value = decodeURIComponent(selector);
+            document.getElementById('msg').textContent = '编辑模式，修改后提交';
+            document.getElementById('msg').className = 'text-warning';
+        }
+        
+        window.deleteSelector = async function (id) {
+            if (!confirm('确定要删除该选择器记录吗？')) return;
+            try {
+                const res = await fetch('/api/selector/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    editingId = null;
+                    document.getElementById('selector').value = '';
+                    document.getElementById('msg').textContent = '';
+                    fetchSelectorList();
+                } else {
+                    alert(result.error || '删除失败');
+                }
+            } catch (error) {
+                alert('删除失败，请重试');
+            }
+        }
+        
+        // 加载选择器列表
+        fetchSelectorList();
+    </script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

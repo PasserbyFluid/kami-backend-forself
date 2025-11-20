@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>域名管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa;
+        }
+
+        .container-custom {
+            max-width: 1800px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #0001;
+            padding: 32px 40px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 32px;
+        }
+
+        .table {
+            margin-top: 24px;
+        }
+
+        .form-label {
+            font-weight: 500;
+        }
+
+        .btn-action {
+            min-width: 60px;
+        }
+
+        #msg {
+            margin-left: 16px;
+            font-weight: bold;
+        }
+
+        .flex-form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .flex-form-row>* {
+            flex: 1 1 220px;
+            min-width: 120px;
+        }
+
+        @media (max-width: 900px) {
+            .container-custom {
+                padding: 12px 2px;
+            }
+
+            h1 {
+                font-size: 1.3rem;
+            }
+
+            .table {
+                font-size: 0.9rem;
+            }
+
+            .flex-form-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">域名管理</h1>
+            <div>
+                <a href="index.html" class="btn btn-outline-primary me-2">卡密管理</a>
+                <a href="cookie.html" class="btn btn-outline-success me-2">Cookie管理</a>
+                <a href="selector.html" class="btn btn-outline-success me-2">选择器管理</a>
+            </div>
+        </div>
+        <form id="addForm" class="flex-form-row mb-4">
+            <div>
+                <label for="domain" class="form-label">域名</label>
+                <input type="text" class="form-control" id="domain" required placeholder="如：example.com">
+            </div>
+            <div>
+                <label for="name" class="form-label">名称</label>
+                <input type="text" class="form-control" id="name" required placeholder="如：示例网站">
+            </div>
+            <div>
+                <label for="pluginId" class="form-label">插件ID</label>
+                <input type="text" class="form-control" id="pluginId" placeholder="如：plugin-example" value="">
+            </div>
+            <div style="display: none;">
+                <label for="type" class="form-label" >类型</label>
+                <select class="form-control" id="type" required >
+                    <option value="1">Cookie</option>
+                    <option value="2">LocalStorage</option>
+                    <option value="3">Cookie + LocalStorage</option>
+                </select>
+            </div>
+            <div>
+                <label for="notifyContent" class="form-label">通知内容</label>
+                <textarea class="form-control" id="notifyContent" rows="3" placeholder="请输入通知内容"></textarea>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">添加</button>
+                <span id="msg"></span>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>名称</th>
+                        <th>域名</th>
+                        <th>插件ID</th>
+                        <!-- <th>类型</th> -->
+                        <th>通知内容</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="domainTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        let editingId = null;
+        
+        // 获取域名类型文本
+        function getTypeText(type) {
+            const typeMap = {
+                '1': 'Cookie',
+                '2': 'LocalStorage',
+                '3': 'Cookie + LocalStorage'
+            };
+            return typeMap[type] || '未知';
+        }
+        
+        async function fetchDomainList() {
+            const res = await fetch('/api/domain/list');
+            const data = await res.json();
+            const tbody = document.getElementById('domainTableBody');
+            tbody.innerHTML = '';
+            data.list.forEach(row => {
+                tbody.innerHTML += `<tr>
+    <td>${row.id}</td>
+    <td>${row.name || ''}</td>
+    <td>${row.domain}</td>
+    <td>${row.pluginId || ''}</td>
+    <td>${row.notifyContent || ''}</td>
+    <td>${row.created_at ? row.created_at.replace('T', ' ').slice(0, 19) : ''}</td>
+    <td>
+      <button class="btn btn-sm btn-outline-warning btn-action me-1" onclick="editDomain(${row.id}, '${encodeURIComponent(row.domain)}', '${row.type}', '${encodeURIComponent(row.name || '')}', '${encodeURIComponent(row.pluginId || '')}', '${encodeURIComponent(row.notifyContent || '')}')">编辑</button>
+      <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteDomain(${row.id})">删除</button>
+    </td>
+  </tr>`;
+            });
+        }
+        
+        document.getElementById('addForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const domain = document.getElementById('domain').value.trim();
+            const name = document.getElementById('name').value.trim();
+            const pluginId = document.getElementById('pluginId').value.trim();
+            const type = document.getElementById('type').value;
+            const msg = document.getElementById('msg');
+            msg.textContent = '';
+            
+            if (!domain) {
+                msg.textContent = '域名不能为空';
+                msg.className = 'text-danger';
+                return;
+            }
+            if (!name) {
+                msg.textContent = '名称不能为空';
+                msg.className = 'text-danger';
+                return;
+            }
+            
+            try {
+                const notifyContent = document.getElementById('notifyContent').value.trim();
+                if (editingId) {
+                    // 修改
+                    const res = await fetch('/api/domain/update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: editingId, domain, name, type, pluginId, notifyContent })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        msg.textContent = '修改成功';
+                        msg.className = 'text-success';
+                        editingId = null;
+                        document.getElementById('addForm').reset();
+                        fetchDomainList();
+                    } else {
+                        msg.textContent = result.error || '修改失败';
+                        msg.className = 'text-danger';
+                    }
+                } else {
+                    // 新增
+                    const res = await fetch('/api/domain/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain, name, type, pluginId, notifyContent })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        msg.textContent = '添加成功';
+                        msg.className = 'text-success';
+                        document.getElementById('addForm').reset();
+                        fetchDomainList();
+                    } else {
+                        msg.textContent = result.error || '添加失败';
+                        msg.className = 'text-danger';
+                    }
+                }
+            } catch (error) {
+                msg.textContent = '操作失败，请重试';
+                msg.className = 'text-danger';
+            }
+        });
+        
+        window.editDomain = function (id, domain, type, name, pluginId, notifyContent) {
+            editingId = id;
+            document.getElementById('domain').value = decodeURIComponent(domain);
+            document.getElementById('name').value = decodeURIComponent(name);
+            document.getElementById('pluginId').value = decodeURIComponent(pluginId || '1');
+            document.getElementById('type').value = type;
+            document.getElementById('notifyContent').value = decodeURIComponent(notifyContent || '');
+            document.getElementById('msg').textContent = '编辑模式，修改后提交';
+            document.getElementById('msg').className = 'text-warning';
+        }
+        
+        window.deleteDomain = async function (id) {
+            if (!confirm('确定要删除该域名记录吗？')) return;
+            try {
+                const res = await fetch('/api/domain/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    editingId = null;
+                    document.getElementById('domain').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('pluginId').value = '1';
+            document.getElementById('type').value = '';
+                    document.getElementById('msg').textContent = '';
+                    fetchDomainList();
+                } else {
+                    alert(result.error || '删除失败');
+                }
+            } catch (error) {
+                alert('删除失败，请重试');
+            }
+        }
+        
+        // 加载域名列表
+        fetchDomainList();
+    </script>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

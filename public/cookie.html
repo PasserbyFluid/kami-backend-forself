@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cookie管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa;
+        }
+
+        .container-custom {
+            max-width: 1800px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px #0001;
+            padding: 32px 40px;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 32px;
+        }
+
+        .table {
+            margin-top: 24px;
+        }
+
+        .form-label {
+            font-weight: 500;
+        }
+
+        .btn-action {
+            min-width: 60px;
+        }
+
+        #msg {
+            margin-left: 16px;
+            font-weight: bold;
+        }
+
+        .flex-form-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .flex-form-row>* {
+            flex: 1 1 220px;
+            min-width: 120px;
+        }
+
+        @media (max-width: 900px) {
+            .container-custom {
+                padding: 12px 2px;
+            }
+
+            h1 {
+                font-size: 1.3rem;
+            }
+
+            .table {
+                font-size: 0.9rem;
+            }
+
+            .flex-form-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Cookie管理</h1>
+            <div>
+                <a href="index.html" class="btn btn-outline-primary me-2">卡密管理</a>
+                <a href="domain.html" class="btn btn-outline-warning">域名管理</a>
+                <a href="selector.html" class="btn btn-outline-success me-2">选择器管理</a>
+            </div>
+        </div>
+        <form id="addForm" class="flex-form-row mb-4">
+            <div>
+                <label for="domain" class="form-label">域名</label>
+                <div class="dropdown">
+                    <button type="button" class="btn btn-outline-secondary form-control text-left dropdown-toggle"
+                        id="domainDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
+                        请选择域名
+                    </button>
+                    <input type="hidden" id="domain" required>
+                    <div class="dropdown-menu w-100 max-h-50 overflow-y-auto" aria-labelledby="domainDropdownButton">
+                        <div class="p-2 bg-light border-bottom">
+                            <input type="text" class="form-control form-control-sm" placeholder="搜索域名..."
+                                id="domainSearch">
+                        </div>
+                        <div id="domainDropdownMenu" class="p-1">
+                            <!-- 域名选项将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label for="account" class="form-label">账号信息</label>
+                <input type="text" class="form-control" id="account" required placeholder="如：用户名/邮箱/手机号">
+            </div>
+            <div>
+                <label for="cookie" class="form-label">Cookie</label>
+                <textarea class="form-control" id="cookie" required placeholder="cookie内容" rows="4"
+                    style="font-family:monospace;"></textarea>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary">添加</button>
+                <span id="msg"></span>
+            </div>
+        </form>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>域名</th>
+                        <th>域名别名</th>
+                        <th>账号信息</th>
+                        <th>Cookie</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="cookieTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        let editingId = null;
+
+        // 存储所有域名数据
+        let allDomains = [];
+        let domainDropdownInstance = null;
+
+        // 加载域名列表
+        async function loadDomains() {
+            try {
+                const res = await fetch('/api/domain/list');
+                const data = await res.json();
+                allDomains = data.list || [];
+                renderDomainDropdown(allDomains);
+
+                // 如果正在编辑且有选中的域名，更新按钮文本
+                if (editingId && document.getElementById('domain').value) {
+                    updateDomainButtonText(document.getElementById('domain').value);
+                }
+            } catch (error) {
+                console.error('加载域名失败:', error);
+            }
+        }
+
+        // 初始化下拉框
+        function initDomainDropdown() {
+            // 确保Bootstrap已加载
+            if (window.bootstrap) {
+                // 获取或创建下拉框实例
+                const dropdownElement = document.getElementById('domainDropdownButton').closest('.dropdown');
+                if (dropdownElement) {
+                    domainDropdownInstance = new bootstrap.Dropdown(dropdownElement);
+                }
+
+                // 添加搜索事件监听
+                document.getElementById('domainSearch').addEventListener('input', function () {
+                    const searchText = this.value.toLowerCase().trim();
+                    filterDomainDropdown(searchText);
+                });
+            }
+        }
+
+        // 渲染域名下拉菜单
+        function renderDomainDropdown(domains) {
+            const menuContainer = document.getElementById('domainDropdownMenu');
+            menuContainer.innerHTML = '';
+
+            if (domains.length === 0) {
+                const emptyItem = document.createElement('button');
+                emptyItem.className = 'dropdown-item text-muted';
+                emptyItem.disabled = true;
+                emptyItem.textContent = '无匹配的域名';
+                menuContainer.appendChild(emptyItem);
+                return;
+            }
+
+            domains.forEach(item => {
+                const domainItem = document.createElement('button');
+                domainItem.className = 'dropdown-item text-truncate';
+                domainItem.type = 'button';
+                domainItem.textContent = item.name;
+                domainItem.dataset.value = item.domain;
+
+                domainItem.addEventListener('click', function () {
+                    const domainValue = this.dataset.value;
+                    document.getElementById('domain').value = domainValue;
+                    updateDomainButtonText(domainValue);
+
+                    // 关闭下拉框
+                    if (domainDropdownInstance) {
+                        domainDropdownInstance.hide();
+                    }
+                });
+
+                menuContainer.appendChild(domainItem);
+            });
+        }
+
+        // 更新下拉按钮文本
+        function updateDomainButtonText(domain) {
+            const button = document.getElementById('domainDropdownButton');
+            button.textContent = domain || '请选择域名';
+            // 添加选中样式
+            button.classList.remove('btn-outline-secondary');
+            button.classList.add('btn-secondary');
+        }
+
+        // 筛选域名下拉菜单
+        function filterDomainDropdown(searchText) {
+            if (!searchText) {
+                renderDomainDropdown(allDomains);
+            } else {
+                const filtered = allDomains.filter(item =>
+                    item.name.toLowerCase().includes(searchText)
+                );
+                renderDomainDropdown(filtered);
+            }
+        }
+
+        // 在页面加载完成后初始化下拉框
+        document.addEventListener('DOMContentLoaded', function () {
+            initDomainDropdown();
+        });
+
+        // 初始化页面
+        async function init() {
+            await loadDomains();
+            fetchCookieList();
+        }
+
+        async function fetchCookieList() {
+            const res = await fetch('/api/cookie/list');
+            const data = await res.json();
+            const tbody = document.getElementById('cookieTableBody');
+            tbody.innerHTML = '';
+            data.list.forEach(row => {
+                const encodedCookie = encodeURIComponent(row.cookie || '');
+                tbody.innerHTML += `<tr>
+    <td>${row.id}</td>
+    <td>${row.domain}</td>
+     <td>${row.domain_name || ''}</td>
+    <td>${row.account_info || ''}</td>
+    <td class="text-nowrap">
+      <button class="btn btn-sm btn-outline-info" onclick="showCookie('${encodedCookie}')">查看</button>
+    </td>
+    <td>${row.created_at ? row.created_at.replace('T', ' ').slice(0, 19) : ''}</td>
+    <td>
+      <button class="btn btn-sm btn-outline-warning btn-action me-1" onclick="editCookie(${row.id}, '${encodeURIComponent(row.domain)}', '${encodeURIComponent(row.account_info || '')}', '${encodeURIComponent(row.cookie || '')}')">编辑</button>
+      <button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteCookie(${row.id})">删除</button>
+    </td>
+  </tr>`;
+            });
+        }
+        document.getElementById('addForm').addEventListener('submit', async e => {
+            e.preventDefault();
+            const domain = document.getElementById('domain').value;
+            const cookie = document.getElementById('cookie').value.trim();
+            const account = document.getElementById('account').value.trim();
+            console.log({ domain, cookie, account })
+            const msg = document.getElementById('msg');
+            msg.textContent = '';
+            if (!domain || !cookie || !account) {
+                msg.textContent = '域名、账号和cookie不能为空';
+                msg.className = 'text-danger';
+                return;
+            }
+            if (editingId) {
+                // 修改
+                const res = await fetch('/api/cookie/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain, cookie, account, id: editingId })
+                });
+                if (res.ok) {
+                    msg.textContent = '修改成功';
+                    msg.className = 'text-success';
+                    editingId = null;
+                    document.getElementById('addForm').reset();
+                    // 重置下拉框状态
+                    document.getElementById('domain').value = '';
+                    const button = document.getElementById('domainDropdownButton');
+                    button.textContent = '请选择域名';
+                    button.classList.remove('btn-secondary');
+                    button.classList.add('btn-outline-secondary');
+                    loadDomains();
+                    fetchCookieList();
+                } else {
+                    msg.textContent = '修改失败';
+                    msg.className = 'text-danger';
+                }
+            } else {
+                // 新增
+                const res = await fetch('/api/cookie/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain, cookie, account })
+                });
+                if (res.ok) {
+                    msg.textContent = '添加成功';
+                    msg.className = 'text-success';
+                    document.getElementById('addForm').reset();
+                    // 重置下拉框状态
+                    document.getElementById('domain').value = '';
+                    const button = document.getElementById('domainDropdownButton');
+                    button.textContent = '请选择域名';
+                    button.classList.remove('btn-secondary');
+                    button.classList.add('btn-outline-secondary');
+                    loadDomains();
+                    fetchCookieList();
+                } else {
+                    msg.textContent = '添加失败';
+                    msg.className = 'text-danger';
+                }
+            }
+        });
+        window.editCookie = function (id, domain, account, cookie) {
+            editingId = id;
+            const decodedDomain = decodeURIComponent(domain);
+
+            // 设置域名值到隐藏输入框
+            document.getElementById('domain').value = decodedDomain;
+
+            // 更新下拉按钮文本和样式
+            updateDomainButtonText(decodedDomain);
+
+            // 设置其他表单字段
+            document.getElementById('account').value = decodeURIComponent(account);
+            document.getElementById('cookie').value = decodeURIComponent(cookie);
+
+            // 显示编辑模式提示
+            document.getElementById('msg').textContent = '编辑模式，修改后提交';
+            document.getElementById('msg').className = 'text-warning';
+        }
+        window.deleteCookie = async function (id) {
+            if (!confirm('确定要删除该cookie记录吗？')) return;
+            const res = await fetch('/api/account-cookie/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if (res.ok) {
+                fetchCookieList();
+            } else {
+                alert('删除失败');
+            }
+        }
+
+        // 页面加载时初始化
+        init();
+    </script>
+    <!-- 查看Cookie 模态框 -->
+    <div class="modal fade" id="cookieViewModal" tabindex="-1" aria-labelledby="cookieViewModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cookieViewModalLabel">Cookie详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea id="cookieViewTextarea" class="form-control" rows="10" readonly
+                        style="font-family:monospace;"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="copyCookieText()">复制</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let cookieViewModalInst = null;
+        document.addEventListener('DOMContentLoaded', function () {
+            if (window.bootstrap && document.getElementById('cookieViewModal')) {
+                cookieViewModalInst = new bootstrap.Modal(document.getElementById('cookieViewModal'));
+            }
+        });
+        window.showCookie = function (enc) {
+            const text = decodeURIComponent(enc || '');
+            const ta = document.getElementById('cookieViewTextarea');
+            ta.value = text;
+            if (cookieViewModalInst) cookieViewModalInst.show();
+            else alert(text);
+        }
+        window.copyCookieText = function () {
+            const ta = document.getElementById('cookieViewTextarea');
+            ta.select();
+            try { document.execCommand('copy'); } catch (e) { }
+        }
+    </script>
+</body>
+
+</html>

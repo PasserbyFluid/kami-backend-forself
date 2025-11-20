@@ -1,0 +1,19 @@
+{
+  "name": "kami-backend",
+  "version": "1.0.0",
+  "description": "卡密生成和激活校验系统后台",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "build": "javascript-obfuscator index.js --output index.ob.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "express": "^4.18.2",
+    "express-session": "^1.18.1",
+    "log4js": "^6.9.1",
+    "node-schedule": "^2.1.1",
+    "socks": "^2.8.7",
+    "sqlite3": "^5.1.7"
+  }
+}
